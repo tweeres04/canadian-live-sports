@@ -1,0 +1,13 @@
+services:
+  canadian-live-sports:
+    build:
+      dockerfile: ./Dockerfile
+      context: .
+    restart: always
+    environment:
+      TZ: America/Vancouver
+
+networks:
+  default:
+    external: true
+    name: proxy
