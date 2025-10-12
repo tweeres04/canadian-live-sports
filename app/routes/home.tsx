@@ -74,11 +74,21 @@ function sportsnetEventToEvent(sportsnetEvent) {
   };
 }
 
+function oneSoccerEventToEvent(oneSoccerEvent) {
+  return {
+    name: oneSoccerEvent.title,
+    duration: oneSoccerEvent.duration,
+    startTime: oneSoccerEvent.eventStartDate,
+    endTime: oneSoccerEvent.eventEndDate,
+    channel: "OneSoccer",
+  };
+}
+
 async function getTsnEvents() {
   const tsnSchedule = await fetch(
     "https://www.tsn.ca/pf/api/v3/content/fetch/sports-schedule-custom"
   ).then((data) => data.json());
-  const liveItems: Event[] = tsnSchedule.filter(isLive).map(tsnEventToEvent);
+  const liveItems: Event[] = tsnSchedule.map(tsnEventToEvent);
   return liveItems;
 }
 
@@ -93,17 +103,43 @@ async function getSportsnetEvents() {
 
   let events = await fetch(url).then((response) => response.json());
   events = events.data.map(sportsnetEventToEvent);
-  events = events.filter(isLive);
+
+  return events;
+}
+
+async function getOneSoccerEvents() {
+  const url = new URL("https://prod-cdn.volt-axis-onesoccer.com/api/page");
+  url.searchParams.set("path", "/");
+
+  const response = await fetch(url).then((response) => response.json());
+  const events = response.entries[1].list.items.map(oneSoccerEventToEvent);
 
   return events;
 }
 
 export async function loader({ params }: Route.LoaderArgs) {
   const events = (
-    await Promise.all([getSportsnetEvents(), getTsnEvents()])
+    await Promise.all([
+      getSportsnetEvents(),
+      getTsnEvents(),
+      getOneSoccerEvents().catch((err) => {
+        console.error(err);
+        return [
+          {
+            name: "There was an error fetching OneSoccer events",
+            duration: 1,
+            startTime: new Date(new Date().getTime() - 1000 * 60).toISOString(),
+            endTime: new Date(new Date().getTime() + 1000 * 60).toISOString(),
+            channel: "OneSoccer",
+          },
+        ];
+      }),
+    ])
   ).flat();
 
-  const mergedEvents = mergeDuplicates(events);
+  const liveEvents = events.filter(isLive);
+
+  const mergedEvents = mergeDuplicates(liveEvents);
 
   const sortedEvents = mergedEvents.toSorted((a, b) => {
     const aIsPriority =
