@@ -5,7 +5,7 @@ export function meta({}: Route.MetaArgs) {
     { title: "Canadian Live Sports" },
     {
       name: "description",
-      content: "Find out what's on TSN and Sportsnet, quickly",
+      content: "Find out what's on right now on TSN and Sportsnet, quickly",
     },
   ];
 }
@@ -105,9 +105,18 @@ export async function loader({ params }: Route.LoaderArgs) {
 
   const mergedEvents = mergeDuplicates(events);
 
-  const sortedEvents = mergedEvents.toSorted((a, b) =>
-    a.channel.localeCompare(b.channel)
-  );
+  const sortedEvents = mergedEvents.toSorted((a, b) => {
+    const aIsPriority =
+      a.channel.startsWith("SN NOW+") || a.channel.startsWith("TSN+");
+    const bIsPriority =
+      b.channel.startsWith("SN NOW+") || b.channel.startsWith("TSN+");
+
+    return aIsPriority && !bIsPriority
+      ? 1
+      : !aIsPriority && bIsPriority
+        ? -1
+        : a.channel.localeCompare(b.channel);
+  });
 
   return sortedEvents;
 }
