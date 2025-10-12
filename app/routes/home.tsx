@@ -118,7 +118,7 @@ export default function Home({ loaderData: events }: Route.ComponentProps) {
       <h1 className="text-4xl">Canadian live sports</h1>
       <ul className="space-y-8">
         {events.map((event) => (
-          <li>
+          <li key={event.name}>
             <h2 className="text-2xl">{event.name}</h2>
             <div className="flex gap-5">
               <div>{event.channel}</div>
