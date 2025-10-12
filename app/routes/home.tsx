@@ -3,7 +3,10 @@ import type { Route } from "./+types/home";
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Canadian Live Sports" },
-    { name: "description", content: "Find out what's on, quickly" },
+    {
+      name: "description",
+      content: "Find out what's on TSN and Sportsnet, quickly",
+    },
   ];
 }
 
@@ -54,26 +57,19 @@ async function getTsnEvents() {
 }
 
 async function getSportsnetEvents() {
-  const today = new Date();
-  const startDate = Math.floor(
-    new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() /
-      1000
-  );
-  const endDate = Math.floor(
-    new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate() + 1
-    ).getTime() / 1000
-  );
+  const now = new Date();
+  const startDate = Math.floor(now.getTime() / 1000 - 60 * 60 * 8);
+  const endDate = startDate + 60 * 60 * 16;
 
   const url = new URL("https://schedule-admin.sportsnet.ca/v1/events");
   url.searchParams.set("day_start", startDate.toString());
   url.searchParams.set("day_end", endDate.toString());
 
-  const events = await fetch(url).then((response) => response.json());
+  let events = await fetch(url).then((response) => response.json());
+  events = events.data.map(sportsnetEventToEvent);
+  events = events.filter(isLive);
 
-  return events.data.map(sportsnetEventToEvent).filter(isLive);
+  return events;
 }
 
 export async function loader({ params }: Route.LoaderArgs) {
