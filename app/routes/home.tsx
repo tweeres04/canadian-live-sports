@@ -20,6 +20,32 @@ function isLive({
   return new Date(endTime) > new Date() && new Date(startTime) < new Date();
 }
 
+function mergeDuplicates(events: Event[]) {
+  return events
+    .filter(
+      (event, index) =>
+        events.findIndex(
+          (e) =>
+            e.name === event.name &&
+            e.startTime === event.startTime &&
+            e.endTime === event.endTime
+        ) === index
+    )
+    .map((event) => ({
+      ...event,
+      channel: events
+        .filter(
+          (e) =>
+            e.name === event.name &&
+            e.startTime === event.startTime &&
+            e.endTime === event.endTime
+        )
+        .map((e) => e.channel)
+        .toSorted((a, b) => a.localeCompare(b))
+        .join(", "),
+    }));
+}
+
 type Event = ReturnType<typeof tsnEventToEvent>;
 
 function tsnEventToEvent(tsnItem) {
@@ -77,8 +103,10 @@ export async function loader({ params }: Route.LoaderArgs) {
     await Promise.all([getSportsnetEvents(), getTsnEvents()])
   ).flat();
 
-  const sortedEvents = events.toSorted(
-    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  const mergedEvents = mergeDuplicates(events);
+
+  const sortedEvents = mergedEvents.toSorted((a, b) =>
+    a.channel.localeCompare(b.channel)
   );
 
   return sortedEvents;
