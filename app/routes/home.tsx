@@ -17,7 +17,7 @@ function isLive({
   startTime: string;
   endTime: string;
 }) {
-  return new Date(endTime) > new Date() && new Date(startTime) < new Date();
+  return new Date(endTime) >= new Date() && new Date(startTime) <= new Date();
 }
 
 function mergeDuplicates(events: Event[]) {
