@@ -5,10 +5,13 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useRouteLoaderData,
 } from "react-router";
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import mixpanel from "mixpanel-browser";
+import { useEffect } from "react";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -23,7 +26,28 @@ export const links: Route.LinksFunction = () => [
   },
 ];
 
+function useMixpanel(mixpanelToken: string | undefined) {
+  useEffect(() => {
+    if (mixpanelToken) {
+      mixpanel.init(mixpanelToken, {
+        autocapture: true,
+        record_sessions_percent: 100,
+      });
+    }
+  }, []);
+}
+
+export async function loader() {
+  return {
+    mixpanelToken: process.env.MIXPANEL_TOKEN,
+  };
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  const loaderData = useRouteLoaderData<typeof loader>("root");
+
+  useMixpanel(loaderData?.mixpanelToken);
+
   return (
     <html lang="en">
       <head>
