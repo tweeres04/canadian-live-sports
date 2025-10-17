@@ -62,7 +62,19 @@ function mergeDuplicates(events: Event[]) {
             e.endTime === event.endTime
         )
         .map((e) => e.channel)
-        .toSorted((a, b) => a.localeCompare(b))
+        .toSorted((a, b) => {
+          // this logic is duplicated below. Would be good to consolidate it
+          const aIsLowPriority =
+            a.startsWith("SN NOW+") || a.startsWith("TSN+");
+          const bIsLowPriority =
+            b.startsWith("SN NOW+") || b.startsWith("TSN+");
+
+          return aIsLowPriority && !bIsLowPriority
+            ? 1
+            : !aIsLowPriority && bIsLowPriority
+              ? -1
+              : a.localeCompare(b);
+        })
         .join(", "),
     }));
 }
@@ -163,14 +175,15 @@ export async function loader({ params }: Route.LoaderArgs) {
   const mergedEvents = mergeDuplicates(liveEvents);
 
   const sortedEvents = mergedEvents.toSorted((a, b) => {
-    const aIsPriority =
+    // this logic is duplicated above. Would be good to consolidate it
+    const aIsLowPriority =
       a.channel.startsWith("SN NOW+") || a.channel.startsWith("TSN+");
-    const bIsPriority =
+    const bIsLowPriority =
       b.channel.startsWith("SN NOW+") || b.channel.startsWith("TSN+");
 
-    return aIsPriority && !bIsPriority
+    return aIsLowPriority && !bIsLowPriority
       ? 1
-      : !aIsPriority && bIsPriority
+      : !aIsLowPriority && bIsLowPriority
         ? -1
         : a.channel.localeCompare(b.channel);
   });
