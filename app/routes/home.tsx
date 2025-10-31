@@ -4,10 +4,11 @@ import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Canadian Live Sports" },
+    { title: "Canadian Live Sports - What's on right now" },
     {
       name: "description",
-      content: "Find out what's on right now on TSN and Sportsnet, quickly",
+      content:
+        "Want to watch sports but not sure what's on? Find out what's on right now on TSN, Sportsnet, and OneSoccer. Fast, and all in one place.",
     },
   ];
 }
