@@ -4,7 +4,10 @@ import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Canadian Live Sports - What's on right now" },
+    {
+      title:
+        "What's on right now on Canadian sports networks? - Canadian Live Sports",
+    },
     {
       name: "description",
       content:
