@@ -122,9 +122,15 @@ function oneSoccerEventToEvent(oneSoccerEvent) {
 }
 
 async function getTsnEvents() {
-  const tsnSchedule = await fetch(
+  const response = await fetch(
     "https://www.tsn.ca/pf/api/v3/content/fetch/sports-schedule-custom"
-  ).then((data) => data.json());
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw `${response.status}: ${text}`;
+  }
+  const tsnSchedule = await response.json();
+  console.log(`TSN items: ${JSON.stringify(tsnSchedule, null, 2)}`);
   const liveItems: Event[] = tsnSchedule.map(tsnEventToEvent);
   return liveItems;
 }
@@ -138,7 +144,12 @@ async function getSportsnetEvents() {
   url.searchParams.set("day_start", startDate.toString());
   url.searchParams.set("day_end", endDate.toString());
 
-  let events = await fetch(url).then((response) => response.json());
+  const response = await fetch(url);
+  if (!response.ok) {
+    const text = await response.text();
+    throw `${response.status}: ${text}`;
+  }
+  let events = await response.json();
   events = events.data.map(sportsnetEventToEvent);
 
   return events;
@@ -148,31 +159,33 @@ async function getOneSoccerEvents() {
   const url = new URL("https://prod-cdn.volt-axis-onesoccer.com/api/page");
   url.searchParams.set("path", "/");
 
-  const response = await fetch(url).then((response) => response.json());
-  const events = response.entries[1].list.items.map(oneSoccerEventToEvent);
+  const response = await fetch(url);
+  if (!response.ok) {
+    const text = await response.text();
+    throw `${response.status}: ${text}`;
+  }
+  const data = await response.json();
+  const events = data.entries[1].list.items.map(oneSoccerEventToEvent);
 
   return events;
 }
 
+const errorHandler = (errors: string[], channel: string) => (err: Error) => {
+  console.error(err);
+  errors.push(`${channel} error: ${err.toString()}`);
+};
+
 export async function loader({ params }: Route.LoaderArgs) {
+  const errors: string[] = [];
   const events = (
     await Promise.all([
-      getSportsnetEvents(),
-      getTsnEvents(),
-      getOneSoccerEvents().catch((err) => {
-        console.error(err);
-        return [
-          {
-            name: "There was an error fetching OneSoccer events",
-            duration: 1,
-            startTime: new Date(new Date().getTime() - 1000 * 60).toISOString(),
-            endTime: new Date(new Date().getTime() + 1000 * 60).toISOString(),
-            channel: "OneSoccer",
-          },
-        ];
-      }),
+      getSportsnetEvents().catch(errorHandler(errors, "Sportsnet")),
+      getTsnEvents().catch(errorHandler(errors, "TSN")),
+      getOneSoccerEvents().catch(errorHandler(errors, "OneSoccer")),
     ])
-  ).flat();
+  )
+    .flat()
+    .filter(Boolean);
 
   const liveEvents = events.filter(isLive);
 
@@ -192,10 +205,12 @@ export async function loader({ params }: Route.LoaderArgs) {
         : a.channel.localeCompare(b.channel);
   });
 
-  return sortedEvents;
+  return { events: sortedEvents, errors };
 }
 
-export default function Home({ loaderData: events }: Route.ComponentProps) {
+export default function Home({
+  loaderData: { events, errors },
+}: Route.ComponentProps) {
   const { revalidate, state: revalidatorState } = useRevalidator();
 
   return (
@@ -211,6 +226,13 @@ export default function Home({ loaderData: events }: Route.ComponentProps) {
           {revalidatorState === "loading" ? "Refreshing..." : "Refresh"}{" "}
         </Button>
       </div>
+      {errors.length > 0 ? (
+        <div className="px-2 py-5 bg-red-50 rounded">
+          {errors.map((e) => (
+            <p className="text-red-950">{e}</p>
+          ))}
+        </div>
+      ) : null}
       <ul className="space-y-8">
         {events.map((event) => (
           <li key={`${event.name}${event.startTime}`}>
