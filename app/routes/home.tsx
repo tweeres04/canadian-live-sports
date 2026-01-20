@@ -1,6 +1,23 @@
 import { Button } from "~/components/ui/button";
-import { useRevalidator } from "react-router";
+import { useRevalidator, Await } from "react-router";
 import type { Route } from "./+types/home";
+import { Suspense } from "react";
+
+function Skeleton() {
+  return (
+    <ul className="space-y-8 animate-pulse">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <li key={i}>
+          <div className="h-8 bg-gray-200 rounded w-3/4 mb-4"></div>
+          <div className="flex gap-5">
+            <div className="h-6 bg-gray-200 rounded w-1/4"></div>
+            <div className="h-6 bg-gray-200 rounded w-1/4"></div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -53,8 +70,8 @@ function mergeDuplicates(events: Event[]) {
           (e) =>
             e.name === event.name &&
             e.startTime === event.startTime &&
-            e.endTime === event.endTime
-        ) === index
+            e.endTime === event.endTime,
+        ) === index,
     )
     .map((event) => ({
       ...event,
@@ -63,7 +80,7 @@ function mergeDuplicates(events: Event[]) {
           (e) =>
             e.name === event.name &&
             e.startTime === event.startTime &&
-            e.endTime === event.endTime
+            e.endTime === event.endTime,
         )
         .map((e) => e.channel)
         .toSorted((a, b) => {
@@ -123,7 +140,7 @@ function oneSoccerEventToEvent(oneSoccerEvent) {
 
 async function getTsnEvents() {
   const response = await fetch(
-    "https://www.tsn.ca/pf/api/v3/content/fetch/sports-schedule-custom"
+    "https://www.tsn.ca/pf/api/v3/content/fetch/sports-schedule-custom",
   );
   if (!response.ok) {
     const text = await response.text();
@@ -175,42 +192,41 @@ const errorHandler = (errors: string[], channel: string) => (err: Error) => {
   errors.push(`${channel} error: ${err.toString()}`);
 };
 
-export async function loader({ params }: Route.LoaderArgs) {
+export function loader({ params }: Route.LoaderArgs) {
   const errors: string[] = [];
-  const events = (
-    await Promise.all([
-      getSportsnetEvents().catch(errorHandler(errors, "Sportsnet")),
-      getTsnEvents().catch(errorHandler(errors, "TSN")),
-      getOneSoccerEvents().catch(errorHandler(errors, "OneSoccer")),
-    ])
-  )
-    .flat()
-    .filter(Boolean);
+  const eventsPromise = Promise.all([
+    getSportsnetEvents().catch(errorHandler(errors, "Sportsnet")),
+    getTsnEvents().catch(errorHandler(errors, "TSN")),
+    getOneSoccerEvents().catch(errorHandler(errors, "OneSoccer")),
+  ]).then((results) => {
+    const events = results.flat().filter(Boolean);
 
-  const liveEvents = events.filter(isLive);
+    const liveEvents = events.filter(isLive);
 
-  const mergedEvents = mergeDuplicates(liveEvents);
+    const mergedEvents = mergeDuplicates(liveEvents);
 
-  const sortedEvents = mergedEvents.toSorted((a, b) => {
-    // this logic is duplicated above. Would be good to consolidate it
-    const aIsLowPriority =
-      a.channel.startsWith("SN NOW+") || a.channel.startsWith("TSN+");
-    const bIsLowPriority =
-      b.channel.startsWith("SN NOW+") || b.channel.startsWith("TSN+");
+    const sortedEvents = mergedEvents.toSorted((a, b) => {
+      // this logic is duplicated above. Would be good to consolidate it
+      const aIsLowPriority =
+        a.channel.startsWith("SN NOW+") || a.channel.startsWith("TSN+");
+      const bIsLowPriority =
+        b.channel.startsWith("SN NOW+") || b.channel.startsWith("TSN+");
 
-    return aIsLowPriority && !bIsLowPriority
-      ? 1
-      : !aIsLowPriority && bIsLowPriority
-        ? -1
-        : a.channel.localeCompare(b.channel);
+      return aIsLowPriority && !bIsLowPriority
+        ? 1
+        : !aIsLowPriority && bIsLowPriority
+          ? -1
+          : a.channel.localeCompare(b.channel);
+    });
+
+    return { events: sortedEvents, errors };
   });
 
-  return { events: sortedEvents, errors };
+  return { eventsData: eventsPromise };
 }
 
-export default function Home({
-  loaderData: { events, errors },
-}: Route.ComponentProps) {
+export default function Home({ loaderData }: Route.ComponentProps) {
+  const { eventsData } = loaderData;
   const { revalidate, state: revalidatorState } = useRevalidator();
 
   return (
@@ -226,36 +242,46 @@ export default function Home({
           {revalidatorState === "loading" ? "Refreshing..." : "Refresh"}{" "}
         </Button>
       </div>
-      {errors.length > 0 ? (
-        <div className="px-2 py-5 bg-red-50 rounded">
-          {errors.map((e) => (
-            <p className="text-red-950">{e}</p>
-          ))}
-        </div>
-      ) : null}
-      <ul className="space-y-8">
-        {events.map((event) => (
-          <li key={`${event.name}${event.startTime}`}>
-            <h2 className="text-2xl">{event.name}</h2>
-            <div className="flex gap-5">
-              <div>{event.channel}</div>
-              <div>
-                {new Intl.DateTimeFormat("en-CA", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                }).format(new Date(event.startTime))}{" "}
-                -{" "}
-                {new Intl.DateTimeFormat("en-CA", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                }).format(new Date(event.endTime))}
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <Suspense fallback={<Skeleton />}>
+        <Await resolve={eventsData}>
+          {({ events, errors }) => (
+            <>
+              {errors.length > 0 ? (
+                <div className="px-2 py-5 bg-red-50 rounded">
+                  {errors.map((e) => (
+                    <p key={e} className="text-red-950">
+                      {e}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              <ul className="space-y-8">
+                {events.map((event) => (
+                  <li key={`${event.name}${event.startTime}`}>
+                    <h2 className="text-2xl">{event.name}</h2>
+                    <div className="flex gap-5">
+                      <div>{event.channel}</div>
+                      <div>
+                        {new Intl.DateTimeFormat("en-CA", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                          hour12: true,
+                        }).format(new Date(event.startTime))}{" "}
+                        -{" "}
+                        {new Intl.DateTimeFormat("en-CA", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                          hour12: true,
+                        }).format(new Date(event.endTime))}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Await>
+      </Suspense>
     </div>
   );
 }
