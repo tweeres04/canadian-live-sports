@@ -139,6 +139,13 @@ const tsnSports: Record<string, string> = {
   "Strongman Competitions": "Strongman",
 };
 
+// ...and when itemsType is a league, keep it as the league too
+const tsnLeagues: Record<string, string> = {
+  CFL: "CFL",
+  NFL: "NFL",
+  "Golf: PGA": "PGA",
+};
+
 function tsnEventToEvent(tsnItem) {
   return {
     name: tsnItem.headlines.basic,
@@ -147,6 +154,7 @@ function tsnEventToEvent(tsnItem) {
     endTime: tsnItem.endTime,
     channel: tsnItem.channelName,
     sport: tsnSports[tsnItem.itemsType] ?? tsnItem.itemsType,
+    league: tsnLeagues[tsnItem.itemsType],
   };
 }
 
@@ -154,6 +162,11 @@ function sportsnetSportToSport(sport: string) {
   return sport === "mma"
     ? "MMA"
     : sport.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function sportsnetLeagueToLeague(league: string) {
+  // Sportsnet leagues are lowercase codes like "nhl", "mlb", "motogp"
+  return league === "motogp" ? "MotoGP" : league.toUpperCase();
 }
 
 function sportsnetEventToEvent(sportsnetEvent) {
@@ -170,10 +183,16 @@ function sportsnetEventToEvent(sportsnetEvent) {
       .filter(Boolean)
       .join(", "),
     sport: sportsnetSportToSport(sportsnetEvent.sport),
+    league: sportsnetLeagueToLeague(sportsnetEvent.league),
   };
 }
 
 function oneSoccerEventToEvent(oneSoccerEvent) {
+  // Studio shows (eg "Match Night") have no relationships key at all
+  const competition = oneSoccerEvent.relationships?.find(
+    (relationship) => relationship.key === "competition",
+  );
+
   return {
     name: oneSoccerEvent.title,
     duration: oneSoccerEvent.duration,
@@ -181,6 +200,7 @@ function oneSoccerEventToEvent(oneSoccerEvent) {
     endTime: oneSoccerEvent.eventEndDate,
     channel: "OneSoccer",
     sport: "Soccer",
+    league: competition?.items[0].title,
   };
 }
 
@@ -326,12 +346,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                         }).format(new Date(event.endTime))}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <HugeiconsIcon
-                        icon={sportIcons[event.sport] ?? WhistleIcon}
-                        size={20}
-                      />
-                      {event.sport}
+                    <div className="flex flex-wrap gap-x-5">
+                      <div className="flex items-center gap-1.5">
+                        <HugeiconsIcon
+                          icon={sportIcons[event.sport] ?? WhistleIcon}
+                          size={20}
+                        />
+                        {event.sport}
+                      </div>
+                      {event.league ? <div>{event.league}</div> : null}
                     </div>
                   </li>
                 ))}
