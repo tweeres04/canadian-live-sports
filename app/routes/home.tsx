@@ -2,6 +2,35 @@ import { Button } from "~/components/ui/button";
 import { useRevalidator, Await } from "react-router";
 import type { Route } from "./+types/home";
 import { Suspense } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  AmericanFootballIcon,
+  BaseballIcon,
+  BasketballIcon,
+  BoxingGloveIcon,
+  Dumbbell01Icon,
+  FootballIcon,
+  GolfBallIcon,
+  IceHockeyIcon,
+  NewsIcon,
+  RacingFlagIcon,
+  TennisBallIcon,
+  WhistleIcon,
+} from "@hugeicons/core-free-icons";
+
+const sportIcons: Record<string, typeof WhistleIcon> = {
+  Hockey: IceHockeyIcon,
+  Baseball: BaseballIcon,
+  Basketball: BasketballIcon,
+  Soccer: FootballIcon,
+  Football: AmericanFootballIcon,
+  Tennis: TennisBallIcon,
+  Golf: GolfBallIcon,
+  "Auto Racing": RacingFlagIcon,
+  MMA: BoxingGloveIcon,
+  Strongman: Dumbbell01Icon,
+  News: NewsIcon,
+};
 
 function Skeleton() {
   return (
@@ -102,6 +131,14 @@ function mergeDuplicates(events: Event[]) {
 
 type Event = ReturnType<typeof tsnEventToEvent>;
 
+// TSN's itemsType mixes sports and leagues; map the league ones to sports
+const tsnSports: Record<string, string> = {
+  CFL: "Football",
+  NFL: "Football",
+  "Golf: PGA": "Golf",
+  "Strongman Competitions": "Strongman",
+};
+
 function tsnEventToEvent(tsnItem) {
   return {
     name: tsnItem.headlines.basic,
@@ -109,7 +146,14 @@ function tsnEventToEvent(tsnItem) {
     startTime: tsnItem.startTime,
     endTime: tsnItem.endTime,
     channel: tsnItem.channelName,
+    sport: tsnSports[tsnItem.itemsType] ?? tsnItem.itemsType,
   };
+}
+
+function sportsnetSportToSport(sport: string) {
+  return sport === "mma"
+    ? "MMA"
+    : sport.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function sportsnetEventToEvent(sportsnetEvent) {
@@ -125,6 +169,7 @@ function sportsnetEventToEvent(sportsnetEvent) {
     ]
       .filter(Boolean)
       .join(", "),
+    sport: sportsnetSportToSport(sportsnetEvent.sport),
   };
 }
 
@@ -135,6 +180,7 @@ function oneSoccerEventToEvent(oneSoccerEvent) {
     startTime: oneSoccerEvent.eventStartDate,
     endTime: oneSoccerEvent.eventEndDate,
     channel: "OneSoccer",
+    sport: "Soccer",
   };
 }
 
@@ -185,7 +231,7 @@ async function getOneSoccerEvents() {
   // OneSoccer's homepage entries shift around (eg promo banners get inserted),
   // so find the events list by title instead of hardcoding an index
   const liveEventsEntry = data.entries.find(
-    (entry) => entry.list?.title === "Live now and upcoming events"
+    (entry) => entry.list?.title === "Live now and upcoming events",
   );
   const events = liveEventsEntry.list.items.map(oneSoccerEventToEvent);
 
@@ -264,7 +310,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                 {events.map((event) => (
                   <li key={`${event.name}${event.startTime}`}>
                     <h2 className="text-2xl">{event.name}</h2>
-                    <div className="flex gap-5">
+                    <div className="flex flex-wrap gap-x-5">
                       <div>{event.channel}</div>
                       <div>
                         {new Intl.DateTimeFormat("en-CA", {
@@ -279,6 +325,13 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                           hour12: true,
                         }).format(new Date(event.endTime))}
                       </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <HugeiconsIcon
+                        icon={sportIcons[event.sport] ?? WhistleIcon}
+                        size={20}
+                      />
+                      {event.sport}
                     </div>
                   </li>
                 ))}
