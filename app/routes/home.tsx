@@ -182,7 +182,12 @@ async function getOneSoccerEvents() {
     throw `${response.status}: ${text}`;
   }
   const data = await response.json();
-  const events = data.entries[1].list.items.map(oneSoccerEventToEvent);
+  // OneSoccer's homepage entries shift around (eg promo banners get inserted),
+  // so find the events list by title instead of hardcoding an index
+  const liveEventsEntry = data.entries.find(
+    (entry) => entry.list?.title === "Live now and upcoming events"
+  );
+  const events = liveEventsEntry.list.items.map(oneSoccerEventToEvent);
 
   return events;
 }
