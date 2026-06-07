@@ -187,20 +187,22 @@ function sportsnetEventToEvent(sportsnetEvent) {
   };
 }
 
-function oneSoccerEventToEvent(oneSoccerEvent) {
-  // Studio shows (eg "Match Night") have no relationships key at all
-  const competition = oneSoccerEvent.relationships?.find(
-    (relationship) => relationship.key === "competition",
-  );
+function oneSoccerEventToEvent(gracenoteEvent) {
+  const program = gracenoteEvent.program;
 
   return {
-    name: oneSoccerEvent.title,
-    duration: oneSoccerEvent.duration,
-    startTime: oneSoccerEvent.eventStartDate,
-    endTime: oneSoccerEvent.eventEndDate,
+    // For games, episodeTitle is the matchup ("Pacific FC at Supra du Québec")
+    // and title is the competition ("Canadian Premier League Soccer"). Studio
+    // shows ("CPL Match Night") only have a title.
+    name: program.episodeTitle || program.title,
+    duration: gracenoteEvent.duration,
+    startTime: gracenoteEvent.startTime,
+    endTime: gracenoteEvent.endTime,
     channel: "OneSoccer",
     sport: "Soccer",
-    league: competition?.items[0].title,
+    league: program.episodeTitle
+      ? program.title.replace(/ Soccer$/, "")
+      : undefined,
   };
 }
 
@@ -238,22 +240,45 @@ async function getSportsnetEvents() {
   return events;
 }
 
+// OneSoccer's own API only lists scheduled live broadcasts, not the 24/7
+// linear channel where replays air. Gracenote (the EPG provider behind Fubo,
+// Telus, etc) has the full linear schedule with clean titles, so use the
+// public guide endpoint that powers tvlistings.gracenote.com. The Telus Optik
+// lineup carries OneSoccer.
 async function getOneSoccerEvents() {
-  const url = new URL("https://prod-cdn.volt-axis-onesoccer.com/api/page");
-  url.searchParams.set("path", "/");
+  const url = new URL("https://tvlistings.gracenote.com/api/grid");
+  url.searchParams.set("lineupId", "CAN-0009973-DEFAULT"); // Telus Optik
+  url.searchParams.set("headendId", "0009973");
+  url.searchParams.set("country", "CAN");
+  url.searchParams.set("postalCode", "V8W1P6");
+  url.searchParams.set("timezone", "");
+  url.searchParams.set("device", "X");
+  url.searchParams.set("isOverride", "true"); // without this it falls back to a default lineup missing OneSoccer
+  url.searchParams.set("pref", "16,128");
+  url.searchParams.set("userId", "-");
+  url.searchParams.set("aid", "orbebb");
+  url.searchParams.set("languagecode", "en-us");
+  url.searchParams.set("timespan", "6");
+  url.searchParams.set("time", Math.floor(Date.now() / 1000).toString());
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    // It 403s unless the request looks like it came from its own guide page
+    headers: {
+      Referer: "https://tvlistings.gracenote.com/grid-affiliates.html?aid=orbebb",
+      "X-Requested-With": "XMLHttpRequest",
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    },
+  });
   if (!response.ok) {
     const text = await response.text();
     throw `${response.status}: ${text}`;
   }
   const data = await response.json();
-  // OneSoccer's homepage entries shift around (eg promo banners get inserted),
-  // so find the events list by title instead of hardcoding an index
-  const liveEventsEntry = data.entries.find(
-    (entry) => entry.list?.title === "Live now and upcoming events",
+  const oneSoccerChannel = data.channels.find(
+    (channel) => channel.callSign === "ONESOC",
   );
-  const events = liveEventsEntry.list.items.map(oneSoccerEventToEvent);
+  const events = oneSoccerChannel.events.map(oneSoccerEventToEvent);
 
   return events;
 }
